@@ -178,18 +178,6 @@ namespace libbag
         return p_memory - p_difference;
     }
 
-    template <typename T>
-    concept packable_iterator = requires {
-        requires std::is_convertible_v<decltype(std::get<0>(std::declval<std::iter_value_t<T>>())), key_type>;
-        requires std::is_convertible_v<decltype(std::get<1>(std::declval<std::iter_value_t<T>>())), content_type>;
-    };
-
-    template <typename T>
-    concept packable = requires {
-        requires packable_iterator<decltype(std::declval<T>().begin())>;
-        requires packable_iterator<decltype(std::declval<T>().end())>;
-    };
-
     template <typename = void>
     auto operator<<(std::basic_ostream<unit_type> &p_stream, const unit_view_type &p_units) -> std::basic_ostream<unit_type> &
     {
@@ -241,14 +229,21 @@ namespace libbag
         return p_stream;
     }
 
-    template <typename = void>
-    auto pack(const packable auto &p_pairs, std::basic_ostream<unit_type> &p_output) -> void
+    template <typename T>
+    concept packing_iterator = requires {
+        requires std::is_convertible_v<decltype(std::get<0>(std::declval<std::iter_value_t<T>>())), key_type>;
+        requires std::is_convertible_v<decltype(std::get<1>(std::declval<std::iter_value_t<T>>())), content_type>;
+    };
+
+    template <packing_iterator Iterator>
+    auto pack(Iterator p_begin, Iterator p_end, std::basic_ostream<unit_type> &p_output) -> void
     {
         std::vector<slice> indices;
         size_type current_byte_offset = 0;
 
-        for (const auto &[raw_key, raw_content] : p_pairs)
+        for (auto it = p_begin; it != p_end; ++it)
         {
+            const auto &[raw_key, raw_content] = *it;
             const auto key = key_type(raw_key);
             const auto content = content_type(raw_content);
 
@@ -265,6 +260,17 @@ namespace libbag
         const size_type indices_byte_count = indices.size() * sizeof(typename decltype(indices)::value_type);
         const metadata data = metadata(identifier_mark, slice(current_byte_offset, indices_byte_count));
         p_output << data;
+    }
+
+    template <typename T>
+    concept packing_container = requires {
+        requires packing_iterator<decltype(std::declval<T>().begin())>;
+        requires packing_iterator<decltype(std::declval<T>().end())>;
+    };
+
+    auto pack(const packing_container auto &p_container, std::basic_ostream<unit_type> &p_output) -> void
+    {
+        pack(p_container.begin(), p_container.end(), p_output);
     }
 
     using attribute_type = std::pair<key_type, slice>;
@@ -305,17 +311,17 @@ namespace libbag
         }
     }
 
-    using item_type = std::pair<key_type, content_type>;
+    using unpack_result_type = std::pair<key_type, content_type>;
 
     template <typename T>
-    concept item_container = requires {
-        std::declval<std::insert_iterator<T>>() = std::declval<item_type>();
+    concept unpack_result_container = requires {
+        std::declval<std::insert_iterator<T>>() = std::declval<unpack_result_type>();
     };
 
     template <typename F>
     concept unpack_filter_predicate = std::predicate<F, attribute_type>;
 
-    template <item_container C, unpack_filter_predicate F>
+    template <unpack_result_container C, unpack_filter_predicate F>
     auto unpack(const bag_type &p_bag, F p_filter_predicate, std::insert_iterator<C> p_output) -> void
     {
         std::vector<attribute_type> attributes;
@@ -337,13 +343,13 @@ namespace libbag
 
             const auto content_unit_pointer = std::find(item_unit_pointer, bag_end_unit_pointer, null_unit) + sizeof(null_unit);
             const auto content_end_unit_pointer = content_unit_pointer + index.byte_count - (key.size()) * sizeof(typename decltype(key)::value_type) - sizeof(null_unit);
-            p_output = item_type(key, content_type(
-                                          memory_view_iterator(content_unit_pointer),
-                                          memory_view_iterator(content_end_unit_pointer)));
+            p_output = unpack_result_type(key, content_type(
+                                                   memory_view_iterator(content_unit_pointer),
+                                                   memory_view_iterator(content_end_unit_pointer)));
         }
     }
 
-    template <item_container C>
+    template <unpack_result_container C>
     auto unpack_all(const bag_type &p_bag, std::insert_iterator<C> p_output) -> void
     {
         unpack(p_bag, [](const attribute_type &p_attribute)
