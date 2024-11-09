@@ -4,8 +4,8 @@
 #include <sstream>
 #include <iostream>
 
-using collection_type = std::map<std::string, std::string>;
-using unpacked_type = std::map<libbag::key_type, libbag::content_type>;
+using collection_type = std::map<libbag::unit_string_type, libbag::unit_string_type>;
+using unpack_result_container_type = std::map<libbag::key_type, libbag::content_type>;
 static_assert(libbag::packing_container<collection_type>);
 
 auto operator<<(std::ostream &p_stream, collection_type p_collection) -> std::ostream &
@@ -26,20 +26,21 @@ TEST_CASE("Pack and unpack", "[libbag]")
         {"file_3", "ghi"}};
     std::cout << "Input: " << input << std::endl;
 
-    std::string packed;
+    libbag::unit_string_type packed;
 
     {
-        std::stringstream stream;
+        libbag::unit_stringstream_type stream;
+        stream << "Prepended data should not be affected.";
         libbag::pack(input, stream);
         packed = stream.str();
     }
 
-    unpacked_type unpacked;
+    unpack_result_container_type unpacked;
     libbag::unpack_all(libbag::bag_type(packed.begin(), packed.end()), std::inserter(unpacked, unpacked.end()));
 
     collection_type output;
     std::transform(unpacked.begin(), unpacked.end(), std::inserter(output, output.end()), [](const libbag::unpack_result_type &p_item)
-                   { return std::pair(std::string(p_item.first), std::string(p_item.second.begin(), p_item.second.end())); });
+                   { return std::pair(libbag::unit_string_type(p_item.first), libbag::unit_string_type(p_item.second.begin(), p_item.second.end())); });
     std::cout << "Output: " << output << std::endl;
 
     REQUIRE(input == output);

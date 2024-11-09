@@ -23,10 +23,13 @@ namespace libbag
 {
     using unit_type = char;
     static_assert(sizeof(unit_type) == 1);
+    using unit_string_view_type = std::basic_string_view<unit_type>;
+    using unit_view_type = std::span<const unit_type>;
+    using unit_string_type = std::basic_string<unit_type>;
+    using unit_stringstream_type = std::basic_stringstream<unit_type>;
 
     using size_type = uint64_t;
-    using key_type = std::basic_string_view<unit_type>;
-    using unit_view_type = std::span<const unit_type>;
+    using key_type = unit_string_view_type;
     using content_type = unit_view_type;
     using bag_type = unit_view_type;
 
@@ -50,10 +53,11 @@ namespace libbag
     struct metadata
     {
         size_type mark;
+        size_type true_byte_count;
         slice index_page;
 
-        constexpr metadata(size_type p_mark, slice p_index_page)
-            : mark(p_mark), index_page(p_index_page) {}
+        constexpr metadata(size_type p_mark, size_type p_true_byte_count, slice p_index_page)
+            : mark(p_mark), true_byte_count(p_true_byte_count), index_page(p_index_page) {}
     };
     static_assert(unique_object_representations<metadata>);
 
@@ -258,7 +262,7 @@ namespace libbag
         p_output << indices;
 
         const size_type indices_byte_count = indices.size() * sizeof(typename decltype(indices)::value_type);
-        const metadata data = metadata(identifier_mark, slice(current_byte_offset, indices_byte_count));
+        const metadata data = metadata(identifier_mark, current_byte_offset + indices_byte_count + sizeof(metadata), slice(current_byte_offset, indices_byte_count));
         p_output << data;
     }
 
@@ -281,34 +285,37 @@ namespace libbag
     };
 
     template <attribute_container C>
-    auto get_attributes(const bag_type &p_bag, std::insert_iterator<C> p_output) -> void
+    auto get_attributes(const bag_type &p_bag, std::insert_iterator<C> p_output) -> const unit_type *
     {
         const auto bag_unit_pointer = static_cast<const unit_type *>(p_bag.data());
         const auto bag_byte_count = p_bag.size_bytes();
+        const auto bag_end_unit_pointer = bag_unit_pointer + bag_byte_count;
 
         // Get metadata.
-        const metadata *data = reinterpret_cast<const metadata *>(bag_unit_pointer + bag_byte_count - sizeof(metadata));
+        const metadata *data = reinterpret_cast<const metadata *>(bag_end_unit_pointer - sizeof(metadata));
         if (data->mark != identifier_mark)
             throw std::runtime_error("Invalid marking.");
 
-        static_assert(std::is_lvalue_reference_v<std::iter_reference_t<memory_view_iterator<slice>>>);
+        const auto origin = bag_end_unit_pointer - data->true_byte_count;
 
         // Get indices.
         const auto indices = slice_view_type(
-            memory_view_iterator(reinterpret_cast<const slice *>(bag_unit_pointer + data->index_page.byte_offset)),
-            memory_view_iterator(reinterpret_cast<const slice *>(bag_unit_pointer + data->index_page.byte_offset + data->index_page.byte_count)));
+            memory_view_iterator(reinterpret_cast<const slice *>(origin + data->index_page.byte_offset)),
+            memory_view_iterator(reinterpret_cast<const slice *>(origin + data->index_page.byte_offset + data->index_page.byte_count)));
 
         // Get attributes.
         for (const auto &index : indices)
         {
-            if (index.byte_offset >= bag_byte_count)
+            if ((index.byte_offset) >= data->true_byte_count)
                 throw std::runtime_error("Invalid byte offset.");
-            if ((index.byte_offset + index.byte_count) >= bag_byte_count)
+            if ((index.byte_offset + index.byte_count) >= data->true_byte_count)
                 throw std::runtime_error("Invalid byte count.");
 
-            const auto key_unit_pointer = bag_unit_pointer + index.byte_offset;
+            const auto key_unit_pointer = origin + index.byte_offset;
             p_output = attribute_type(key_type(key_unit_pointer), index);
         }
+
+        return origin;
     }
 
     using unpack_result_type = std::pair<key_type, content_type>;
@@ -325,7 +332,7 @@ namespace libbag
     auto unpack(const bag_type &p_bag, F p_filter_predicate, std::insert_iterator<C> p_output) -> void
     {
         std::vector<attribute_type> attributes;
-        get_attributes(p_bag, std::inserter(attributes, attributes.end()));
+        const auto origin = get_attributes(p_bag, std::inserter(attributes, attributes.end()));
 
         const auto bag_unit_pointer = static_cast<const unit_type *>(p_bag.data());
         const auto bag_end_unit_pointer = bag_unit_pointer + p_bag.size_bytes();
@@ -335,7 +342,7 @@ namespace libbag
                 continue;
 
             const auto &[key, index] = attribute;
-            const auto item_unit_pointer = bag_unit_pointer + index.byte_offset;
+            const auto item_unit_pointer = origin + index.byte_offset;
             const auto key_unit_pointer = item_unit_pointer;
 
             if (key != key_type(key_unit_pointer))
