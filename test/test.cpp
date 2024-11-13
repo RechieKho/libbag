@@ -6,7 +6,7 @@
 
 using collection_type = std::map<libbag::unit_string_type, libbag::unit_string_type>;
 using unpack_result_container_type = std::map<libbag::key_type, libbag::content_type>;
-static_assert(libbag::packing_container<collection_type>);
+static_assert(libbag::packing_container_c<collection_type>);
 
 auto operator<<(std::ostream &p_stream, collection_type p_collection) -> std::ostream &
 {
