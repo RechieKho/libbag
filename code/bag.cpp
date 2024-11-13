@@ -96,6 +96,7 @@ public:
 };
 
 int main(int p_argument_count, const char *p_argument_values[])
+try
 {
 
     std::span<const char *> arguments{p_argument_values, static_cast<std::size_t>(p_argument_count)};
@@ -114,4 +115,8 @@ int main(int p_argument_count, const char *p_argument_values[])
         stream);
 
     return 0;
+}
+catch (std::exception e)
+{
+    std::cerr << "Error: " << e.what() << std::endl;
 }
