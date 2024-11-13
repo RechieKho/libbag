@@ -2,6 +2,7 @@
 
 A simple, modern, header-only, custom implementation of bundling (zipping) and unbundling (unzipping) library in C++20.
 There is no allocation and deallocation in the library as it uses streams and insert iterators to output result.
+It is not to be confused with cryptography as there is no encryption and decryption involved.
 
 ## Directory structure
 
