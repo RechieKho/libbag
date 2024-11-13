@@ -52,7 +52,7 @@ try
 
     return 0;
 }
-catch (std::exception e)
+catch (const std::exception &e)
 {
     std::cerr << "Error: " << e.what() << std::endl;
 }
