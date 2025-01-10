@@ -45,7 +45,11 @@ try
 
         for (const auto &[key, content] : unpacked)
         {
-            std::basic_ofstream<libbag::unit_type> output_file(key, std::ios::binary);
+            std::filesystem::path output_path(key);
+            output_path.make_preferred();
+            std::filesystem::path output_directory_path = output_path.parent_path();
+            std::filesystem::create_directories(output_directory_path);
+            std::basic_ofstream<libbag::unit_type> output_file(output_path, std::ios::binary);
             output_file.write(content.data(), content.size_bytes());
         }
     }

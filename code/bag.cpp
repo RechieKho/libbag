@@ -95,6 +95,24 @@ public:
     }
 };
 
+auto glob_regular_file_path(const std::vector<std::filesystem::path> &p_paths) -> std::vector<std::filesystem::path>
+{
+    std::vector<std::filesystem::path> result;
+    std::copy_if(p_paths.begin(), p_paths.end(), std::back_inserter(result), [](const std::filesystem::path p_path)
+                 { return std::filesystem::directory_entry(p_path).is_regular_file(); });
+
+    std::vector<std::filesystem::path> directories;
+    std::copy_if(p_paths.begin(), p_paths.end(), std::back_inserter(directories), [](const std::filesystem::path p_path)
+                 { return std::filesystem::directory_entry(p_path).is_directory(); });
+
+    for (const std::filesystem::path &directory_path : directories)
+        for (const std::filesystem::directory_entry &p_entry : std::filesystem::recursive_directory_iterator(directory_path))
+            if (p_entry.is_regular_file())
+                result.push_back(p_entry.path());
+
+    return result;
+}
+
 int main(int p_argument_count, const char *p_argument_values[])
 try
 {
@@ -109,9 +127,15 @@ try
 
     std::basic_ofstream<libbag::unit_type> stream(arguments[1], std::ios::binary);
 
+    std::vector<std::filesystem::path> input_paths;
+    std::transform(std::next(arguments.begin(), 2), arguments.end(), std::back_inserter(input_paths), [](const char *p_argument)
+                   { return std::filesystem::path(p_argument); });
+
+    std::vector<std::filesystem::path> input_regular_file_paths = glob_regular_file_path(input_paths);
+
     libbag::pack(
-        file_list_reader_iterator_t(std::next(arguments.begin(), 2)),
-        file_list_reader_iterator_t(arguments.end()),
+        file_list_reader_iterator_t(input_regular_file_paths.begin()),
+        file_list_reader_iterator_t(input_regular_file_paths.end()),
         stream);
 
     return 0;
