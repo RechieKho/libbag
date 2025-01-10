@@ -22,11 +22,11 @@
 namespace libbag
 {
     template <typename T>
-    concept has_char_trait = requires { typename std::char_traits<T>::char_type; };
+    concept has_char_trait_c = requires { typename std::char_traits<T>::char_type; };
 
     using unit_type = char;
     static_assert(sizeof(unit_type) == 1);
-    static_assert(has_char_trait<unit_type>);
+    static_assert(has_char_trait_c<unit_type>);
     using unit_string_view_type = std::basic_string_view<unit_type>;
     using unit_span_type = std::span<const unit_type>;
     using unit_string_type = std::basic_string<unit_type>;
@@ -283,9 +283,9 @@ namespace libbag
     };
 
     template <typename F>
-    concept unpack_filter_predicate = std::predicate<F, attribute_type>;
+    concept unpack_filter_predicate_c = std::predicate<F, attribute_type>;
 
-    template <unpack_result_container_c C, unpack_filter_predicate F>
+    template <unpack_result_container_c C, unpack_filter_predicate_c F>
     auto unpack(const bag_type &p_bag, F p_filter_predicate, std::insert_iterator<C> p_output) -> void
     {
         std::vector<attribute_type> attributes;
